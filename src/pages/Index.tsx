@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { platforms, genres, getRecommendations, type Series } from "@/data/series";
+import { platforms, genres, getRecommendations, seriesData, type Series } from "@/data/series";
 import { Tv, Clapperboard, Heart, Bookmark, LogIn, LogOut, Search, Star } from "lucide-react";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useWatchlist } from "@/hooks/useWatchlist";
