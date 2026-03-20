@@ -87,9 +87,7 @@ const Index = () => {
 
   const filteredResults = filterResults(results);
 
-  // Build favorites list from the full dataset
-  const { seriesData } = require("@/data/series");
-  const favoriteSeries: Series[] = seriesData.filter((s: Series) => favorites.includes(s.title));
+  const favoriteSeries: Series[] = seriesData.filter(s => favorites.includes(s.title));
 
   const watchlistSeries: Series[] = watchlist.map(w => ({
     title: w.series_title,
