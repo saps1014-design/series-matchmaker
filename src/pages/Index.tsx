@@ -298,10 +298,13 @@ const Index = () => {
     });
 
   const filteredResults = filterResults(results);
-  const trending = useMemo(() => getTrending(6), []);
+  const dedupe = (list: Series[]) => {
+    const seen = new Set<string>();
+    return list.filter(s => (seen.has(s.title) ? false : (seen.add(s.title), true)));
+  };
+  const trending = useMemo(() => dedupe(getTrending(6)), []);
   const quickPicks = useMemo(() => {
-    // Random 3 high-rated picks (rating >= 8.3), stable per mount
-    const pool = seriesData.filter(s => s.rating >= 8.3);
+    const pool = dedupe(seriesData.filter(s => s.rating >= 8.3));
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, 3);
   }, []);
