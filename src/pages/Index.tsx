@@ -10,11 +10,10 @@ import {
   platforms,
   genres,
   moods,
-  getRecommendations,
   getTrending,
-  getByMood,
   seriesData,
   platformStyles,
+  moodToGenres,
   type Series,
   type Mood,
 } from "@/data/series";
