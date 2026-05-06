@@ -591,6 +591,10 @@ const Index = () => {
                   <Link to="/auth"><LogIn className="mr-1 h-4 w-4" /> Sign In</Link>
                 </Button>
               </div>
+            ) : watchlistLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[0, 1, 2, 3].map(i => <SeriesCardSkeleton key={i} />)}
+              </div>
             ) : watchlistSeries.length === 0 ? (
               <div className="rounded-2xl border border-dashed bg-card/50 p-8 text-center space-y-3 animate-fade-in">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent">
