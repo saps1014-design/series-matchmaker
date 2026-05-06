@@ -8,6 +8,32 @@ export interface Series {
 
 export const platforms = ["Netflix", "Prime Video", "Disney+", "Max", "Apple TV+"] as const;
 export const genres = ["Drama", "Comedy", "Action", "Sci-Fi", "Thriller"] as const;
+export const moods = ["Funny", "Relaxing", "Exciting", "Suspenseful", "Mind-blowing"] as const;
+export type Mood = (typeof moods)[number];
+
+export const genreToMood: Record<string, Mood> = {
+  Comedy: "Funny",
+  Drama: "Relaxing",
+  Action: "Exciting",
+  Thriller: "Suspenseful",
+  "Sci-Fi": "Mind-blowing",
+};
+
+export const moodToGenres: Record<Mood, string[]> = {
+  Funny: ["Comedy"],
+  Relaxing: ["Drama", "Comedy"],
+  Exciting: ["Action", "Thriller"],
+  Suspenseful: ["Thriller", "Drama"],
+  "Mind-blowing": ["Sci-Fi"],
+};
+
+export const platformStyles: Record<string, string> = {
+  Netflix: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30",
+  "Prime Video": "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30",
+  "Disney+": "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30",
+  Max: "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30",
+  "Apple TV+": "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/30",
+};
 
 export const seriesData: Series[] = [
   // Netflix - Drama
@@ -191,4 +217,16 @@ export const seriesData: Series[] = [
 
 export function getRecommendations(platform: string, genre: string): Series[] {
   return seriesData.filter(s => s.platform === platform && s.genre === genre);
+}
+
+export function getTrending(limit = 6): Series[] {
+  return [...seriesData].sort((a, b) => b.rating - a.rating).slice(0, limit);
+}
+
+export function getByMood(mood: Mood, limit = 8): Series[] {
+  const allowed = new Set(moodToGenres[mood]);
+  return [...seriesData]
+    .filter(s => allowed.has(s.genre))
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, limit);
 }
