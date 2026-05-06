@@ -33,7 +33,7 @@ export function useWatchlist(userId: string | null) {
     if (error) {
       toast({ title: "Error loading watchlist", description: error.message, variant: "destructive" });
     } else {
-      setWatchlist(data || []);
+      setWatchlist((data || []) as WatchlistItem[]);
     }
     setLoading(false);
   }, [userId, toast]);
