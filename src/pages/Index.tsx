@@ -1,15 +1,45 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { platforms, genres, getRecommendations, seriesData, type Series } from "@/data/series";
-import { Tv, Clapperboard, Heart, Bookmark, LogIn, LogOut, Search, Star } from "lucide-react";
+import {
+  platforms,
+  genres,
+  moods,
+  getRecommendations,
+  getTrending,
+  getByMood,
+  seriesData,
+  platformStyles,
+  type Series,
+  type Mood,
+} from "@/data/series";
+import {
+  Tv,
+  Clapperboard,
+  Heart,
+  Bookmark,
+  LogIn,
+  LogOut,
+  Search,
+  Star,
+  Sparkles,
+  Shuffle,
+  TrendingUp,
+  Sun,
+  Moon,
+  Wand2,
+} from "lucide-react";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { useAuth } from "@/hooks/useAuth";
 import { Link } from "react-router-dom";
+import { useTheme } from "next-themes";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const SeriesCard = ({
   series,
@@ -18,6 +48,7 @@ const SeriesCard = ({
   onToggleFavorite,
   onToggleWatchlist,
   isLoggedIn,
+  highlight = false,
 }: {
   series: Series;
   isFavorite: boolean;
@@ -25,34 +56,47 @@ const SeriesCard = ({
   onToggleFavorite: () => void;
   onToggleWatchlist: () => void;
   isLoggedIn: boolean;
+  highlight?: boolean;
 }) => (
-  <div className="rounded-lg border bg-card p-4 shadow-sm transition-colors hover:bg-accent">
-    <div className="flex items-start justify-between gap-2">
+  <div
+    className={cn(
+      "group relative rounded-2xl border bg-card p-5 shadow-[var(--shadow-card)] transition-all duration-300",
+      "hover:-translate-y-1 hover:shadow-[var(--shadow-elegant)] hover:border-primary/40 animate-fade-in",
+      highlight && "ring-2 ring-primary/40"
+    )}
+  >
+    <div className="flex items-start justify-between gap-3">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-foreground truncate">{series.title}</h3>
-          <span className="flex items-center gap-0.5 text-xs text-muted-foreground shrink-0">
-            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-            {series.rating}
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <Badge variant="outline" className={cn("border", platformStyles[series.platform])}>
+            {series.platform}
+          </Badge>
+          <Badge variant="secondary" className="rounded-full">{series.genre}</Badge>
+          <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+            {series.rating.toFixed(1)}
           </span>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">{series.description}</p>
+        <h3 className="font-semibold text-foreground text-lg leading-tight group-hover:text-primary transition-colors">
+          {series.title}
+        </h3>
+        <p className="mt-1.5 text-sm text-muted-foreground line-clamp-3">{series.description}</p>
       </div>
-      <div className="flex gap-1 shrink-0">
+      <div className="flex flex-col gap-1 shrink-0">
         <button
           onClick={onToggleFavorite}
-          className="rounded-md p-1.5 hover:bg-muted transition-colors"
+          className="rounded-full p-2 hover:bg-muted transition-all hover:scale-110"
           title={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
-          <Heart className={`h-4 w-4 ${isFavorite ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
+          <Heart className={cn("h-4 w-4 transition-colors", isFavorite ? "fill-red-500 text-red-500" : "text-muted-foreground")} />
         </button>
         {isLoggedIn && (
           <button
             onClick={onToggleWatchlist}
-            className="rounded-md p-1.5 hover:bg-muted transition-colors"
+            className="rounded-full p-2 hover:bg-muted transition-all hover:scale-110"
             title={isInWatchlist ? "Remove from watchlist" : "Add to watchlist"}
           >
-            <Bookmark className={`h-4 w-4 ${isInWatchlist ? "fill-primary text-primary" : "text-muted-foreground"}`} />
+            <Bookmark className={cn("h-4 w-4 transition-colors", isInWatchlist ? "fill-primary text-primary" : "text-muted-foreground")} />
           </button>
         )}
       </div>
@@ -60,22 +104,79 @@ const SeriesCard = ({
   </div>
 );
 
+const ThemeToggle = () => {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const current = theme === "system" ? resolvedTheme : theme;
+  return (
+    <Button
+      variant="outline"
+      size="icon"
+      className="rounded-full"
+      onClick={() => setTheme(current === "dark" ? "light" : "dark")}
+      title="Toggle theme"
+    >
+      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+    </Button>
+  );
+};
+
 const Index = () => {
   const [platform, setPlatform] = useState("");
   const [genre, setGenre] = useState("");
+  const [mood, setMood] = useState<Mood | "">("");
   const [results, setResults] = useState<Series[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [minRating, setMinRating] = useState([0]);
+  const [surprise, setSurprise] = useState<Series | null>(null);
+  const [reasonText, setReasonText] = useState<string>("");
 
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
   const { user, signOut } = useAuth();
   const { isInWatchlist, addToWatchlist, removeFromWatchlist, watchlist } = useWatchlist(user?.id ?? null);
 
+  const buildReason = (p: string, g: string, m: Mood | "") => {
+    const parts: string[] = [];
+    if (p) parts.push(p);
+    if (g) parts.push(g);
+    if (m) parts.push(`a ${m.toLowerCase()} mood`);
+    if (parts.length === 0) return "";
+    return `Recommended because you selected ${parts.join(" and ")}.`;
+  };
+
+  const computeResults = (p: string, g: string, m: Mood | "") => {
+    let list: Series[] = [];
+    if (p && g) {
+      list = getRecommendations(p, g);
+    } else if (m) {
+      list = getByMood(m, 20);
+      if (p) list = list.filter(s => s.platform === p);
+    } else if (p) {
+      list = seriesData.filter(s => s.platform === p);
+    }
+    return list;
+  };
+
   const handleSearch = () => {
-    if (!platform || !genre) return;
-    setResults(getRecommendations(platform, genre));
+    if (!platform && !genre && !mood) {
+      toast.error("Pick at least a platform, genre, or mood");
+      return;
+    }
+    setResults(computeResults(platform, genre, mood));
+    setReasonText(buildReason(platform, genre, mood));
+    setSurprise(null);
     setHasSearched(true);
+  };
+
+  const handleSurprise = () => {
+    const pool = computeResults(platform, genre, mood);
+    const source = pool.length > 0 ? pool : seriesData;
+    const pick = source[Math.floor(Math.random() * source.length)];
+    setSurprise(pick);
+    setReasonText(buildReason(platform, genre, mood) || "A handpicked surprise just for you.");
+    setHasSearched(true);
+    toast.success(`Surprise pick: ${pick.title}`);
   };
 
   const filterResults = (list: Series[]) =>
@@ -86,6 +187,7 @@ const Index = () => {
     });
 
   const filteredResults = filterResults(results);
+  const trending = useMemo(() => getTrending(6), []);
 
   const favoriteSeries: Series[] = seriesData.filter(s => favorites.includes(s.title));
 
@@ -99,44 +201,61 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-2xl px-4 py-10">
-        <header className="mb-8 text-center">
-          <div className="mb-2 flex items-center justify-center gap-2">
-            <Tv className="h-8 w-8 text-primary" />
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">Series Finder</h1>
-          </div>
-          <p className="text-muted-foreground">Find your next binge-worthy show by platform and genre.</p>
-          <div className="mt-3 flex justify-center">
-            {user ? (
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span>{user.email}</span>
-                <Button variant="ghost" size="sm" onClick={signOut}>
-                  <LogOut className="mr-1 h-4 w-4" /> Sign Out
-                </Button>
-              </div>
-            ) : (
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/auth"><LogIn className="mr-1 h-4 w-4" /> Sign in for Watchlist</Link>
+      <div
+        className="absolute inset-x-0 top-0 h-[420px] -z-0 opacity-80"
+        style={{ background: "var(--gradient-hero)" }}
+        aria-hidden="true"
+      />
+      <div className="relative mx-auto max-w-4xl px-4 py-10">
+        <div className="flex items-center justify-end gap-2 mb-4">
+          {user ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="hidden sm:inline">{user.email}</span>
+              <Button variant="ghost" size="sm" onClick={signOut}>
+                <LogOut className="mr-1 h-4 w-4" /> Sign Out
               </Button>
-            )}
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/auth"><LogIn className="mr-1 h-4 w-4" /> Sign in</Link>
+            </Button>
+          )}
+          <ThemeToggle />
+        </div>
+
+        <header className="mb-10 text-center animate-fade-in">
+          <div className="mb-3 inline-flex items-center justify-center gap-2 rounded-full border bg-card/60 backdrop-blur px-4 py-1.5 text-xs font-medium text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5 text-primary" /> Smart TV recommendations
           </div>
+          <div className="mb-3 flex items-center justify-center gap-3">
+            <Tv className="h-9 w-9 text-primary" />
+            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-primary)" }}>
+              Series Finder
+            </h1>
+          </div>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            Discover your next binge by platform, genre, and mood — or let us surprise you.
+          </p>
         </header>
 
         <Tabs defaultValue="search" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4 rounded-full p-1">
             <TabsTrigger value="search">
               <Search className="mr-1 h-4 w-4" /> Search
             </TabsTrigger>
+            <TabsTrigger value="trending">
+              <TrendingUp className="mr-1 h-4 w-4" /> Trending
+            </TabsTrigger>
             <TabsTrigger value="favorites">
-              <Heart className="mr-1 h-4 w-4" /> Favorites ({favorites.length})
+              <Heart className="mr-1 h-4 w-4" /> <span className="hidden sm:inline">Favorites</span> ({favorites.length})
             </TabsTrigger>
             <TabsTrigger value="watchlist">
-              <Bookmark className="mr-1 h-4 w-4" /> Watchlist ({watchlist.length})
+              <Bookmark className="mr-1 h-4 w-4" /> <span className="hidden sm:inline">Watchlist</span> ({watchlist.length})
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="search" className="space-y-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
+            <div className="rounded-2xl border bg-card/80 backdrop-blur p-6 shadow-[var(--shadow-card)] space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Platform</label>
@@ -158,13 +277,35 @@ const Index = () => {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                  <Wand2 className="h-3.5 w-3.5 text-primary" /> Mood
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {moods.map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setMood(mood === m ? "" : m)}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-sm transition-all hover:scale-105",
+                        mood === m
+                          ? "border-primary bg-primary text-primary-foreground shadow-[var(--shadow-elegant)]"
+                          : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40"
+                      )}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by title or description..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 rounded-full"
                 />
               </div>
 
@@ -175,23 +316,104 @@ const Index = () => {
                 <Slider value={minRating} onValueChange={setMinRating} min={0} max={10} step={0.5} />
               </div>
 
-              <Button className="w-full" size="lg" onClick={handleSearch} disabled={!platform || !genre}>
-                <Clapperboard className="mr-2 h-4 w-4" /> Get Recommendations
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button
+                  className="flex-1 rounded-full shadow-[var(--shadow-elegant)] transition-transform hover:scale-[1.02]"
+                  size="lg"
+                  onClick={handleSearch}
+                >
+                  <Clapperboard className="mr-2 h-4 w-4" /> Get Recommendations
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="rounded-full transition-transform hover:scale-[1.02]"
+                  onClick={handleSurprise}
+                >
+                  <Shuffle className="mr-2 h-4 w-4" /> Surprise Me
+                </Button>
+              </div>
             </div>
 
-            {hasSearched && (
+            {reasonText && hasSearched && (
+              <div className="rounded-xl border border-primary/30 bg-accent/50 px-4 py-3 text-sm text-accent-foreground flex items-start gap-2 animate-fade-in">
+                <Sparkles className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                <span>{reasonText}</span>
+              </div>
+            )}
+
+            {surprise && (
+              <div className="space-y-3 animate-fade-in">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Shuffle className="h-4 w-4 text-primary" /> Your Surprise Pick
+                </h2>
+                <SeriesCard
+                  series={surprise}
+                  highlight
+                  isFavorite={isFavorite(surprise.title)}
+                  isInWatchlist={isInWatchlist(surprise.title)}
+                  onToggleFavorite={() => toggleFavorite(surprise.title)}
+                  onToggleWatchlist={() => isInWatchlist(surprise.title) ? removeFromWatchlist(surprise.title) : addToWatchlist(surprise)}
+                  isLoggedIn={!!user}
+                />
+              </div>
+            )}
+
+            {hasSearched && !surprise && (
               <div className="space-y-3">
                 <h2 className="text-lg font-semibold text-foreground">
                   {filteredResults.length > 0
-                    ? `${filteredResults.length} results for ${genre} on ${platform}`
-                    : `No results found for ${genre} on ${platform}`}
+                    ? `${filteredResults.length} ${filteredResults.length === 1 ? "result" : "results"}`
+                    : "No results found"}
                 </h2>
-                {filteredResults.map((s, i) => (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {filteredResults.map((s, i) => (
+                    <SeriesCard
+                      key={i}
+                      series={s}
+                      isFavorite={isFavorite(s.title)}
+                      isInWatchlist={isInWatchlist(s.title)}
+                      onToggleFavorite={() => toggleFavorite(s.title)}
+                      onToggleWatchlist={() => isInWatchlist(s.title) ? removeFromWatchlist(s.title) : addToWatchlist(s)}
+                      isLoggedIn={!!user}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="trending" className="space-y-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold">Trending Now</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">The highest-rated series people are watching right now.</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {trending.map((s, i) => (
+                <SeriesCard
+                  key={i}
+                  series={s}
+                  isFavorite={isFavorite(s.title)}
+                  isInWatchlist={isInWatchlist(s.title)}
+                  onToggleFavorite={() => toggleFavorite(s.title)}
+                  onToggleWatchlist={() => isInWatchlist(s.title) ? removeFromWatchlist(s.title) : addToWatchlist(s)}
+                  isLoggedIn={!!user}
+                />
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="favorites" className="space-y-3">
+            {favoriteSeries.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No favorites yet. Click the ❤️ icon to add series.</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {favoriteSeries.map((s: Series, i: number) => (
                   <SeriesCard
                     key={i}
                     series={s}
-                    isFavorite={isFavorite(s.title)}
+                    isFavorite={true}
                     isInWatchlist={isInWatchlist(s.title)}
                     onToggleFavorite={() => toggleFavorite(s.title)}
                     onToggleWatchlist={() => isInWatchlist(s.title) ? removeFromWatchlist(s.title) : addToWatchlist(s)}
@@ -199,24 +421,6 @@ const Index = () => {
                   />
                 ))}
               </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="favorites" className="space-y-3">
-            {favoriteSeries.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No favorites yet. Click the ❤️ icon to add series.</p>
-            ) : (
-              favoriteSeries.map((s: Series, i: number) => (
-                <SeriesCard
-                  key={i}
-                  series={s}
-                  isFavorite={true}
-                  isInWatchlist={isInWatchlist(s.title)}
-                  onToggleFavorite={() => toggleFavorite(s.title)}
-                  onToggleWatchlist={() => isInWatchlist(s.title) ? removeFromWatchlist(s.title) : addToWatchlist(s)}
-                  isLoggedIn={!!user}
-                />
-              ))
             )}
           </TabsContent>
 
@@ -231,17 +435,19 @@ const Index = () => {
             ) : watchlistSeries.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Your watchlist is empty. Click the 🔖 icon to save series.</p>
             ) : (
-              watchlistSeries.map((s, i) => (
-                <SeriesCard
-                  key={i}
-                  series={s}
-                  isFavorite={isFavorite(s.title)}
-                  isInWatchlist={true}
-                  onToggleFavorite={() => toggleFavorite(s.title)}
-                  onToggleWatchlist={() => removeFromWatchlist(s.title)}
-                  isLoggedIn={true}
-                />
-              ))
+              <div className="grid gap-4 sm:grid-cols-2">
+                {watchlistSeries.map((s, i) => (
+                  <SeriesCard
+                    key={i}
+                    series={s}
+                    isFavorite={isFavorite(s.title)}
+                    isInWatchlist={true}
+                    onToggleFavorite={() => toggleFavorite(s.title)}
+                    onToggleWatchlist={() => removeFromWatchlist(s.title)}
+                    isLoggedIn={true}
+                  />
+                ))}
+              </div>
             )}
           </TabsContent>
         </Tabs>
