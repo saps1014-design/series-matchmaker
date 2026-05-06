@@ -254,21 +254,21 @@ const Index = () => {
   };
 
   const computeResults = (p: string, g: string, m: Mood | "") => {
-    let list: Series[] = [];
-    if (p && g) {
-      list = getRecommendations(p, g);
-    } else if (m) {
-      list = getByMood(m, 20);
-      if (p) list = list.filter(s => s.platform === p);
-    } else if (p) {
-      list = seriesData.filter(s => s.platform === p);
+    let list: Series[] = seriesData;
+    if (p) list = list.filter(s => s.platform === p);
+    if (g) list = list.filter(s => s.genre === g);
+    if (m) {
+      const allowed = new Set(moodToGenres[m]);
+      list = list.filter(s => allowed.has(s.genre));
     }
-    return list;
+    // De-duplicate by title for safety
+    const seen = new Set<string>();
+    return list.filter(s => (seen.has(s.title) ? false : (seen.add(s.title), true)));
   };
 
   const handleSearch = () => {
-    if (!platform && !genre && !mood) {
-      toast.error("Pick at least a platform, genre, or mood");
+    if (!platform && !genre && !mood && !searchQuery.trim() && minRating[0] === 0) {
+      toast.error("Pick at least a platform, genre, mood, or search term");
       return;
     }
     setResults(computeResults(platform, genre, mood));
@@ -278,9 +278,13 @@ const Index = () => {
   };
 
   const handleSurprise = () => {
-    const pool = computeResults(platform, genre, mood);
-    const source = pool.length > 0 ? pool : seriesData;
+    const filtered = filterResults(computeResults(platform, genre, mood));
+    const source = filtered.length > 0 ? filtered : seriesData;
     const pick = source[Math.floor(Math.random() * source.length)];
+    if (!pick) {
+      toast.error("No matches available — try clearing some filters.");
+      return;
+    }
     setSurprise(pick);
     setReasonText(buildReason(platform, genre, mood) || "A handpicked surprise just for you.");
     setHasSearched(true);
