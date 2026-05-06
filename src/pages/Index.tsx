@@ -34,7 +34,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { useFavorites } from "@/hooks/useFavorites";
-import { useWatchlist } from "@/hooks/useWatchlist";
+import { useWatchlist, WATCH_STATUSES, type WatchStatus } from "@/hooks/useWatchlist";
 import { useAuth } from "@/hooks/useAuth";
 import { Link } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -231,7 +231,7 @@ const Index = () => {
 
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
   const { user, signOut } = useAuth();
-  const { isInWatchlist, addToWatchlist, removeFromWatchlist, watchlist, loading: watchlistLoading } = useWatchlist(user?.id ?? null);
+  const { isInWatchlist, addToWatchlist, removeFromWatchlist, updateStatus, watchlist, loading: watchlistLoading } = useWatchlist(user?.id ?? null);
 
   // Persist filter state
   useEffect(() => {
@@ -611,17 +611,52 @@ const Index = () => {
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
-                {watchlistSeries.map((s, i) => (
-                  <SeriesCard
-                    key={i}
-                    series={s}
-                    isFavorite={isFavorite(s.title)}
-                    isInWatchlist={true}
-                    onToggleFavorite={() => toggleFavorite(s.title)}
-                    onToggleWatchlist={() => removeFromWatchlist(s.title)}
-                    isLoggedIn={true}
-                  />
-                ))}
+                {watchlist.map(item => {
+                  const s: Series = {
+                    title: item.series_title,
+                    description: item.series_description || "",
+                    platform: item.series_platform,
+                    genre: item.series_genre,
+                    rating: item.series_rating || 0,
+                  };
+                  return (
+                    <div key={item.id} className="space-y-2">
+                      <SeriesCard
+                        series={s}
+                        isFavorite={isFavorite(s.title)}
+                        isInWatchlist={true}
+                        onToggleFavorite={() => toggleFavorite(s.title)}
+                        onToggleWatchlist={() => removeFromWatchlist(s.title)}
+                        isLoggedIn={true}
+                      />
+                      <div className="flex flex-wrap items-center gap-1.5 px-1">
+                        {WATCH_STATUSES.map(status => (
+                          <button
+                            key={status}
+                            onClick={() => updateStatus(item.series_title, status as WatchStatus)}
+                            aria-pressed={item.watch_status === status}
+                            className={cn(
+                              "rounded-full border px-2.5 py-1 text-xs transition-colors min-h-[32px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                              item.watch_status === status
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40"
+                            )}
+                          >
+                            {status}
+                          </button>
+                        ))}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="ml-auto text-xs text-muted-foreground hover:text-destructive"
+                          onClick={() => removeFromWatchlist(item.series_title)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </TabsContent>

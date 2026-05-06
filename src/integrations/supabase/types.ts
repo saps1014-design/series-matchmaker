@@ -18,32 +18,44 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          mood: string | null
+          poster_color: string | null
           series_description: string | null
           series_genre: string
           series_platform: string
           series_rating: number | null
           series_title: string
+          updated_at: string
           user_id: string
+          watch_status: string
         }
         Insert: {
           created_at?: string
           id?: string
+          mood?: string | null
+          poster_color?: string | null
           series_description?: string | null
           series_genre: string
           series_platform: string
           series_rating?: number | null
           series_title: string
+          updated_at?: string
           user_id: string
+          watch_status?: string
         }
         Update: {
           created_at?: string
           id?: string
+          mood?: string | null
+          poster_color?: string | null
           series_description?: string | null
           series_genre?: string
           series_platform?: string
           series_rating?: number | null
           series_title?: string
+          updated_at?: string
           user_id?: string
+          watch_status?: string
         }
         Relationships: []
       }
