@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   platforms,
   genres,
@@ -58,21 +59,21 @@ const SeriesPoster = ({ series, size = "md" }: { series: Series; size?: "sm" | "
     .map(w => w[0]?.toUpperCase())
     .join("");
   const gradient = platformGradients[series.platform] ?? "from-primary to-primary/60";
-  const sizeCls = size === "sm" ? "h-16 w-16 text-lg" : "h-20 w-20 sm:h-24 sm:w-24 text-2xl";
+  const sizeCls = size === "sm" ? "h-16 w-16 text-lg" : "h-20 w-20 sm:h-24 sm:w-24 text-xl sm:text-2xl";
   return (
     <div
       className={cn(
-        "relative shrink-0 overflow-hidden rounded-xl bg-gradient-to-br shadow-md ring-1 ring-black/5",
+        "relative shrink-0 overflow-hidden rounded-xl bg-gradient-to-br shadow-md ring-1 ring-black/10 dark:ring-white/10",
         gradient,
         sizeCls
       )}
       aria-hidden="true"
     >
-      <div className="absolute inset-0 flex items-center justify-center font-bold text-white drop-shadow">
+      <div className="absolute inset-0 flex items-center justify-center font-bold text-white drop-shadow-sm tracking-tight">
         {initials}
       </div>
-      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-      <Tv className="absolute bottom-1 right-1 h-3 w-3 text-white/70" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
+      <Tv className="absolute bottom-1.5 right-1.5 h-3 w-3 text-white/80" />
     </div>
   );
 };
@@ -118,7 +119,7 @@ const SeriesCard = ({
   <div
     className={cn(
       "group relative rounded-2xl border bg-card p-5 shadow-[var(--shadow-card)] transition-all duration-300",
-      "hover:-translate-y-1 hover:shadow-[var(--shadow-elegant)] hover:border-primary/40 animate-fade-in",
+      "hover:-translate-y-1 hover:shadow-[var(--shadow-elegant)] hover:border-primary/40 animate-fade-in focus-within:ring-2 focus-within:ring-primary/40",
       highlight && "ring-2 ring-primary/40"
     )}
   >
@@ -131,7 +132,7 @@ const SeriesCard = ({
           </Badge>
           <Badge variant="secondary" className="rounded-full text-[10px] sm:text-xs">{series.genre}</Badge>
         </div>
-        <h3 className="font-semibold text-foreground text-base sm:text-lg leading-tight group-hover:text-primary transition-colors">
+        <h3 className="font-semibold text-foreground text-base sm:text-lg leading-tight group-hover:text-primary transition-colors break-words">
           {series.title}
         </h3>
         <div className="mt-1"><StarRating rating={series.rating} /></div>
@@ -140,7 +141,9 @@ const SeriesCard = ({
       <div className="flex flex-col gap-1 shrink-0">
         <button
           onClick={onToggleFavorite}
-          className="rounded-full p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-muted active:scale-95 transition-all hover:scale-110"
+          aria-label={isFavorite ? `Remove ${series.title} from favorites` : `Add ${series.title} to favorites`}
+          aria-pressed={isFavorite}
+          className="rounded-full p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-muted active:scale-95 transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           title={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <Heart className={cn("h-4 w-4 transition-colors", isFavorite ? "fill-red-500 text-red-500" : "text-muted-foreground")} />
@@ -148,12 +151,32 @@ const SeriesCard = ({
         {isLoggedIn && (
           <button
             onClick={onToggleWatchlist}
-            className="rounded-full p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-muted active:scale-95 transition-all hover:scale-110"
+            aria-label={isInWatchlist ? `Remove ${series.title} from watchlist` : `Add ${series.title} to watchlist`}
+            aria-pressed={isInWatchlist}
+            className="rounded-full p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-muted active:scale-95 transition-all hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             title={isInWatchlist ? "Remove from watchlist" : "Add to watchlist"}
           >
             <Bookmark className={cn("h-4 w-4 transition-colors", isInWatchlist ? "fill-primary text-primary" : "text-muted-foreground")} />
           </button>
         )}
+      </div>
+    </div>
+  </div>
+);
+
+const SeriesCardSkeleton = () => (
+  <div className="rounded-2xl border bg-card p-5 shadow-[var(--shadow-card)]">
+    <div className="flex items-start gap-4">
+      <Skeleton className="h-20 w-20 sm:h-24 sm:w-24 rounded-xl shrink-0" />
+      <div className="flex-1 space-y-2">
+        <div className="flex gap-2">
+          <Skeleton className="h-4 w-16 rounded-full" />
+          <Skeleton className="h-4 w-12 rounded-full" />
+        </div>
+        <Skeleton className="h-5 w-3/4" />
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-5/6" />
       </div>
     </div>
   </div>
@@ -169,6 +192,7 @@ const ThemeToggle = () => {
       className="rounded-full"
       onClick={() => setTheme(current === "dark" ? "light" : "dark")}
       title="Toggle theme"
+      aria-label="Toggle dark mode"
     >
       <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
       <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -176,20 +200,49 @@ const ThemeToggle = () => {
   );
 };
 
+const FILTERS_KEY = "sf:filters:v1";
+type PersistedFilters = {
+  platform: string;
+  genre: string;
+  mood: Mood | "";
+  searchQuery: string;
+  minRating: number;
+};
+const loadFilters = (): PersistedFilters | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(FILTERS_KEY);
+    return raw ? (JSON.parse(raw) as PersistedFilters) : null;
+  } catch {
+    return null;
+  }
+};
+
 const Index = () => {
-  const [platform, setPlatform] = useState("");
-  const [genre, setGenre] = useState("");
-  const [mood, setMood] = useState<Mood | "">("");
+  const persisted = useMemo(loadFilters, []);
+  const [platform, setPlatform] = useState(persisted?.platform ?? "");
+  const [genre, setGenre] = useState(persisted?.genre ?? "");
+  const [mood, setMood] = useState<Mood | "">(persisted?.mood ?? "");
   const [results, setResults] = useState<Series[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [minRating, setMinRating] = useState([0]);
+  const [searchQuery, setSearchQuery] = useState(persisted?.searchQuery ?? "");
+  const [minRating, setMinRating] = useState<number[]>([persisted?.minRating ?? 0]);
   const [surprise, setSurprise] = useState<Series | null>(null);
   const [reasonText, setReasonText] = useState<string>("");
 
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
   const { user, signOut } = useAuth();
-  const { isInWatchlist, addToWatchlist, removeFromWatchlist, watchlist } = useWatchlist(user?.id ?? null);
+  const { isInWatchlist, addToWatchlist, removeFromWatchlist, watchlist, loading: watchlistLoading } = useWatchlist(user?.id ?? null);
+
+  // Persist filter state
+  useEffect(() => {
+    try {
+      const data: PersistedFilters = { platform, genre, mood, searchQuery, minRating: minRating[0] };
+      window.localStorage.setItem(FILTERS_KEY, JSON.stringify(data));
+    } catch {
+      // ignore
+    }
+  }, [platform, genre, mood, searchQuery, minRating]);
 
   const buildReason = (p: string, g: string, m: Mood | "") => {
     const parts: string[] = [];
@@ -267,7 +320,7 @@ const Index = () => {
         style={{ background: "var(--gradient-hero)" }}
         aria-hidden="true"
       />
-      <div className="relative mx-auto max-w-4xl px-4 py-10">
+      <div className="relative mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-10">
         <div className="flex items-center justify-end gap-2 mb-4">
           {user ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -537,6 +590,10 @@ const Index = () => {
                 <Button variant="outline" asChild>
                   <Link to="/auth"><LogIn className="mr-1 h-4 w-4" /> Sign In</Link>
                 </Button>
+              </div>
+            ) : watchlistLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[0, 1, 2, 3].map(i => <SeriesCardSkeleton key={i} />)}
               </div>
             ) : watchlistSeries.length === 0 ? (
               <div className="rounded-2xl border border-dashed bg-card/50 p-8 text-center space-y-3 animate-fade-in">
