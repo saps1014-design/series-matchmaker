@@ -41,6 +41,63 @@ import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+// Visual poster placeholder using gradients per platform + initials
+const platformGradients: Record<string, string> = {
+  Netflix: "from-red-600 via-rose-500 to-orange-500",
+  "Prime Video": "from-blue-600 via-sky-500 to-cyan-400",
+  "Disney+": "from-indigo-700 via-blue-600 to-cyan-500",
+  Max: "from-purple-700 via-fuchsia-600 to-pink-500",
+  "Apple TV+": "from-zinc-700 via-zinc-800 to-black",
+};
+
+const SeriesPoster = ({ series, size = "md" }: { series: Series; size?: "sm" | "md" }) => {
+  const initials = series.title
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0]?.toUpperCase())
+    .join("");
+  const gradient = platformGradients[series.platform] ?? "from-primary to-primary/60";
+  const sizeCls = size === "sm" ? "h-16 w-16 text-lg" : "h-20 w-20 sm:h-24 sm:w-24 text-2xl";
+  return (
+    <div
+      className={cn(
+        "relative shrink-0 overflow-hidden rounded-xl bg-gradient-to-br shadow-md ring-1 ring-black/5",
+        gradient,
+        sizeCls
+      )}
+      aria-hidden="true"
+    >
+      <div className="absolute inset-0 flex items-center justify-center font-bold text-white drop-shadow">
+        {initials}
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+      <Tv className="absolute bottom-1 right-1 h-3 w-3 text-white/70" />
+    </div>
+  );
+};
+
+const StarRating = ({ rating }: { rating: number }) => {
+  // Convert 0-10 scale to 0-5 stars
+  const stars = rating / 2;
+  return (
+    <div className="flex items-center gap-0.5" title={`${rating.toFixed(1)} / 10`}>
+      {[0, 1, 2, 3, 4].map(i => {
+        const fill = Math.max(0, Math.min(1, stars - i));
+        return (
+          <div key={i} className="relative h-3.5 w-3.5">
+            <Star className="absolute inset-0 h-3.5 w-3.5 text-muted-foreground/40" />
+            <div className="absolute inset-0 overflow-hidden" style={{ width: `${fill * 100}%` }}>
+              <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+            </div>
+          </div>
+        );
+      })}
+      <span className="ml-1 text-xs font-medium text-muted-foreground">{rating.toFixed(1)}</span>
+    </div>
+  );
+};
+
 const SeriesCard = ({
   series,
   isFavorite,
@@ -65,27 +122,25 @@ const SeriesCard = ({
       highlight && "ring-2 ring-primary/40"
     )}
   >
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex items-start gap-4">
+      <SeriesPoster series={series} />
       <div className="flex-1 min-w-0">
-        <div className="flex flex-wrap items-center gap-2 mb-2">
-          <Badge variant="outline" className={cn("border", platformStyles[series.platform])}>
+        <div className="flex flex-wrap items-center gap-2 mb-1.5">
+          <Badge variant="outline" className={cn("border text-[10px] sm:text-xs", platformStyles[series.platform])}>
             {series.platform}
           </Badge>
-          <Badge variant="secondary" className="rounded-full">{series.genre}</Badge>
-          <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-            {series.rating.toFixed(1)}
-          </span>
+          <Badge variant="secondary" className="rounded-full text-[10px] sm:text-xs">{series.genre}</Badge>
         </div>
-        <h3 className="font-semibold text-foreground text-lg leading-tight group-hover:text-primary transition-colors">
+        <h3 className="font-semibold text-foreground text-base sm:text-lg leading-tight group-hover:text-primary transition-colors">
           {series.title}
         </h3>
-        <p className="mt-1.5 text-sm text-muted-foreground line-clamp-3">{series.description}</p>
+        <div className="mt-1"><StarRating rating={series.rating} /></div>
+        <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2 sm:line-clamp-3">{series.description}</p>
       </div>
       <div className="flex flex-col gap-1 shrink-0">
         <button
           onClick={onToggleFavorite}
-          className="rounded-full p-2 hover:bg-muted transition-all hover:scale-110"
+          className="rounded-full p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-muted active:scale-95 transition-all hover:scale-110"
           title={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <Heart className={cn("h-4 w-4 transition-colors", isFavorite ? "fill-red-500 text-red-500" : "text-muted-foreground")} />
@@ -93,7 +148,7 @@ const SeriesCard = ({
         {isLoggedIn && (
           <button
             onClick={onToggleWatchlist}
-            className="rounded-full p-2 hover:bg-muted transition-all hover:scale-110"
+            className="rounded-full p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center hover:bg-muted active:scale-95 transition-all hover:scale-110"
             title={isInWatchlist ? "Remove from watchlist" : "Add to watchlist"}
           >
             <Bookmark className={cn("h-4 w-4 transition-colors", isInWatchlist ? "fill-primary text-primary" : "text-muted-foreground")} />
@@ -188,6 +243,12 @@ const Index = () => {
 
   const filteredResults = filterResults(results);
   const trending = useMemo(() => getTrending(6), []);
+  const quickPicks = useMemo(() => {
+    // Random 3 high-rated picks (rating >= 8.3), stable per mount
+    const pool = seriesData.filter(s => s.rating >= 8.3);
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 3);
+  }, []);
 
   const favoriteSeries: Series[] = seriesData.filter(s => favorites.includes(s.title));
 
@@ -239,18 +300,18 @@ const Index = () => {
         </header>
 
         <Tabs defaultValue="search" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 rounded-full p-1">
+          <TabsList className="grid w-full grid-cols-4 rounded-full p-1 h-auto">
             <TabsTrigger value="search">
-              <Search className="mr-1 h-4 w-4" /> Search
+              <Search className="mr-1 h-4 w-4" /> <span className="hidden sm:inline">Search</span>
             </TabsTrigger>
             <TabsTrigger value="trending">
-              <TrendingUp className="mr-1 h-4 w-4" /> Trending
+              <TrendingUp className="mr-1 h-4 w-4" /> <span className="hidden sm:inline">Trending</span>
             </TabsTrigger>
             <TabsTrigger value="favorites">
-              <Heart className="mr-1 h-4 w-4" /> <span className="hidden sm:inline">Favorites</span> ({favorites.length})
+              <Heart className="mr-1 h-4 w-4" /> <span className="hidden sm:inline">Favorites</span><span className="ml-1">({favorites.length})</span>
             </TabsTrigger>
             <TabsTrigger value="watchlist">
-              <Bookmark className="mr-1 h-4 w-4" /> <span className="hidden sm:inline">Watchlist</span> ({watchlist.length})
+              <Bookmark className="mr-1 h-4 w-4" /> <span className="hidden sm:inline">Watchlist</span><span className="ml-1">({watchlist.length})</span>
             </TabsTrigger>
           </TabsList>
 
@@ -318,7 +379,7 @@ const Index = () => {
 
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button
-                  className="flex-1 rounded-full shadow-[var(--shadow-elegant)] transition-transform hover:scale-[1.02]"
+                  className="flex-1 rounded-full shadow-[var(--shadow-elegant)] transition-transform hover:scale-[1.02] active:scale-[0.98] min-h-[48px]"
                   size="lg"
                   onClick={handleSearch}
                 >
@@ -327,13 +388,37 @@ const Index = () => {
                 <Button
                   variant="outline"
                   size="lg"
-                  className="rounded-full transition-transform hover:scale-[1.02]"
+                  className="rounded-full transition-transform hover:scale-[1.02] active:scale-[0.98] min-h-[48px]"
                   onClick={handleSurprise}
                 >
                   <Shuffle className="mr-2 h-4 w-4" /> Surprise Me
                 </Button>
               </div>
             </div>
+
+            {!hasSearched && quickPicks.length > 0 && (
+              <div className="space-y-3 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  <h2 className="text-lg font-semibold">Quick Picks Tonight</h2>
+                </div>
+                <p className="text-sm text-muted-foreground">A few highlights to get you started.</p>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {quickPicks.map((s, i) => (
+                    <SeriesCard
+                      key={i}
+                      series={s}
+                      highlight
+                      isFavorite={isFavorite(s.title)}
+                      isInWatchlist={isInWatchlist(s.title)}
+                      onToggleFavorite={() => toggleFavorite(s.title)}
+                      onToggleWatchlist={() => isInWatchlist(s.title) ? removeFromWatchlist(s.title) : addToWatchlist(s)}
+                      isLoggedIn={!!user}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {reasonText && hasSearched && (
               <div className="rounded-xl border border-primary/30 bg-accent/50 px-4 py-3 text-sm text-accent-foreground flex items-start gap-2 animate-fade-in">
@@ -361,24 +446,39 @@ const Index = () => {
 
             {hasSearched && !surprise && (
               <div className="space-y-3">
-                <h2 className="text-lg font-semibold text-foreground">
-                  {filteredResults.length > 0
-                    ? `${filteredResults.length} ${filteredResults.length === 1 ? "result" : "results"}`
-                    : "No results found"}
-                </h2>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {filteredResults.map((s, i) => (
-                    <SeriesCard
-                      key={i}
-                      series={s}
-                      isFavorite={isFavorite(s.title)}
-                      isInWatchlist={isInWatchlist(s.title)}
-                      onToggleFavorite={() => toggleFavorite(s.title)}
-                      onToggleWatchlist={() => isInWatchlist(s.title) ? removeFromWatchlist(s.title) : addToWatchlist(s)}
-                      isLoggedIn={!!user}
-                    />
-                  ))}
-                </div>
+                {filteredResults.length > 0 ? (
+                  <>
+                    <h2 className="text-lg font-semibold text-foreground">
+                      {filteredResults.length} {filteredResults.length === 1 ? "result" : "results"}
+                    </h2>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {filteredResults.map((s, i) => (
+                        <SeriesCard
+                          key={i}
+                          series={s}
+                          isFavorite={isFavorite(s.title)}
+                          isInWatchlist={isInWatchlist(s.title)}
+                          onToggleFavorite={() => toggleFavorite(s.title)}
+                          onToggleWatchlist={() => isInWatchlist(s.title) ? removeFromWatchlist(s.title) : addToWatchlist(s)}
+                          isLoggedIn={!!user}
+                        />
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-2xl border border-dashed bg-card/50 p-8 text-center space-y-4 animate-fade-in">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent">
+                      <Search className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-semibold">No perfect matches found</h3>
+                      <p className="text-sm text-muted-foreground">Try another mood or use Surprise Me.</p>
+                    </div>
+                    <Button onClick={handleSurprise} className="rounded-full" size="lg">
+                      <Shuffle className="mr-2 h-4 w-4" /> Surprise Me Instead
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>
@@ -406,7 +506,13 @@ const Index = () => {
 
           <TabsContent value="favorites" className="space-y-3">
             {favoriteSeries.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No favorites yet. Click the ❤️ icon to add series.</p>
+              <div className="rounded-2xl border border-dashed bg-card/50 p-8 text-center space-y-3 animate-fade-in">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent">
+                  <Heart className="h-6 w-6 text-red-500" />
+                </div>
+                <h3 className="text-lg font-semibold">No favorites yet</h3>
+                <p className="text-sm text-muted-foreground">Tap the ❤️ icon on any series to save it here.</p>
+              </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
                 {favoriteSeries.map((s: Series, i: number) => (
@@ -433,7 +539,13 @@ const Index = () => {
                 </Button>
               </div>
             ) : watchlistSeries.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">Your watchlist is empty. Click the 🔖 icon to save series.</p>
+              <div className="rounded-2xl border border-dashed bg-card/50 p-8 text-center space-y-3 animate-fade-in">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent">
+                  <Bookmark className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="text-lg font-semibold">Your watchlist is empty</h3>
+                <p className="text-sm text-muted-foreground">Tap the 🔖 icon on any series to add it.</p>
+              </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
                 {watchlistSeries.map((s, i) => (
