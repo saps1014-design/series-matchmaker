@@ -57,7 +57,7 @@ const SeriesPoster = ({ series, size = "md" }: { series: Series; size?: "sm" | "
     .slice(0, 2)
     .map(w => w[0]?.toUpperCase())
     .join("");
-  const gradient = platformGradients[series.platform] ?? "from-primary to-primary/60";
+  const gradient = series.posterColor ?? platformGradients[series.platform] ?? "from-primary to-primary/60";
   const sizeCls = size === "sm" ? "h-16 w-16 text-lg" : "h-20 w-20 sm:h-24 sm:w-24 text-xl sm:text-2xl";
   return (
     <div
