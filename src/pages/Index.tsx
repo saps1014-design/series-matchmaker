@@ -252,17 +252,67 @@ const Index = () => {
     return `Recommended because you selected ${parts.join(" and ")}.`;
   };
 
-  const computeResults = (p: string, g: string, m: Mood | "") => {
-    let list: Series[] = seriesData;
-    if (p) list = list.filter(s => s.platform === p);
-    if (g) list = list.filter(s => s.genre === g);
+  // Smart, tiered recommendation engine. Mood acts as a soft preference:
+  // we relax constraints progressively until we find matches, instead of
+  // returning an empty result set.
+  const computeResults = (
+    p: string,
+    g: string,
+    m: Mood | ""
+  ): { list: Series[]; relaxed: "none" | "mood" | "genre" | "platform" | "all" } => {
+    const dedupeList = (list: Series[]) => {
+      const seen = new Set<string>();
+      return list.filter(s => (seen.has(s.title) ? false : (seen.add(s.title), true)));
+    };
+
+    const apply = (filters: {
+      platform?: string;
+      genre?: string;
+      mood?: Mood | "";
+    }) => {
+      let list: Series[] = seriesData;
+      if (filters.platform) list = list.filter(s => s.platform === filters.platform);
+      if (filters.genre) list = list.filter(s => s.genre === filters.genre);
+      if (filters.mood) {
+        const allowed = new Set(moodToGenres[filters.mood]);
+        list = list.filter(s => allowed.has(s.genre));
+      }
+      return dedupeList(list);
+    };
+
+    // Tier 1: strict — all selected filters honored
+    const strict = apply({ platform: p, genre: g, mood: m });
+    if (strict.length > 0) return { list: strict, relaxed: "none" };
+
+    // Tier 2: relax mood (mood is a soft preference)
     if (m) {
-      const allowed = new Set(moodToGenres[m]);
-      list = list.filter(s => allowed.has(s.genre));
+      const noMood = apply({ platform: p, genre: g });
+      if (noMood.length > 0) {
+        // Re-rank: items matching the mood's genre family come first
+        const allowed = new Set(moodToGenres[m]);
+        const ranked = [
+          ...noMood.filter(s => allowed.has(s.genre)),
+          ...noMood.filter(s => !allowed.has(s.genre)),
+        ];
+        return { list: dedupeList(ranked), relaxed: "mood" };
+      }
     }
-    // De-duplicate by title for safety
-    const seen = new Set<string>();
-    return list.filter(s => (seen.has(s.title) ? false : (seen.add(s.title), true)));
+
+    // Tier 3: relax genre, keep platform + mood preference
+    if (g) {
+      const noGenre = apply({ platform: p, mood: m });
+      if (noGenre.length > 0) return { list: noGenre, relaxed: "genre" };
+    }
+
+    // Tier 4: relax platform, keep genre/mood preference
+    if (p) {
+      const noPlatform = apply({ genre: g, mood: m });
+      if (noPlatform.length > 0) return { list: noPlatform, relaxed: "platform" };
+    }
+
+    // Tier 5: top-rated catalog as a final broad fallback
+    const broad = dedupeList([...seriesData].sort((a, b) => b.rating - a.rating)).slice(0, 8);
+    return { list: broad, relaxed: "all" };
   };
 
   const handleSearch = () => {
@@ -270,15 +320,36 @@ const Index = () => {
       toast.error("Pick at least a platform, genre, mood, or search term");
       return;
     }
-    setResults(computeResults(platform, genre, mood));
-    setReasonText(buildReason(platform, genre, mood));
+    const { list, relaxed } = computeResults(platform, genre, mood);
+    setResults(list);
+    const base = buildReason(platform, genre, mood);
+    const helper =
+      relaxed === "mood"
+        ? "No exact mood match was found, so here are similar recommendations."
+        : relaxed === "genre"
+        ? "No exact genre match — showing related picks on your platform."
+        : relaxed === "platform"
+        ? "Nothing matched on that platform — showing similar picks elsewhere."
+        : relaxed === "all"
+        ? "No exact match — here are top-rated picks you might enjoy."
+        : "";
+    setReasonText([base, helper].filter(Boolean).join(" "));
+    setRelaxLevel(relaxed);
     setSurprise(null);
     setHasSearched(true);
   };
 
   const handleSurprise = () => {
-    const filtered = filterResults(computeResults(platform, genre, mood));
-    const source = filtered.length > 0 ? filtered : seriesData;
+    // Surprise Me always returns something — fall back through the same
+    // tiered logic, then to the full catalog if needed.
+    const { list } = computeResults(platform, genre, mood);
+    const filtered = filterResults(list);
+    const source =
+      filtered.length > 0
+        ? filtered
+        : list.length > 0
+        ? list
+        : seriesData;
     const pick = source[Math.floor(Math.random() * source.length)];
     if (!pick) {
       toast.error("No matches available — try clearing some filters.");
@@ -286,6 +357,7 @@ const Index = () => {
     }
     setSurprise(pick);
     setReasonText(buildReason(platform, genre, mood) || "A handpicked surprise just for you.");
+    setRelaxLevel("none");
     setHasSearched(true);
     toast.success(`Surprise pick: ${pick.title}`);
   };
