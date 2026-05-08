@@ -334,7 +334,6 @@ const Index = () => {
         ? "No exact match — here are top-rated picks you might enjoy."
         : "";
     setReasonText([base, helper].filter(Boolean).join(" "));
-    setRelaxLevel(relaxed);
     setSurprise(null);
     setHasSearched(true);
   };
@@ -357,7 +356,6 @@ const Index = () => {
     }
     setSurprise(pick);
     setReasonText(buildReason(platform, genre, mood) || "A handpicked surprise just for you.");
-    setRelaxLevel("none");
     setHasSearched(true);
     toast.success(`Surprise pick: ${pick.title}`);
   };
