@@ -228,6 +228,7 @@ const Index = () => {
   const [minRating, setMinRating] = useState<number[]>([persisted?.minRating ?? 0]);
   const [surprise, setSurprise] = useState<Series | null>(null);
   const [reasonText, setReasonText] = useState<string>("");
+  const [relaxLevel, setRelaxLevel] = useState<"none" | "mood" | "genre" | "platform" | "all">("none");
 
   const { isFavorite, toggleFavorite, favorites } = useFavorites();
   const { user, signOut } = useAuth();
