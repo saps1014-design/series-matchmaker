@@ -243,6 +243,42 @@ const Index = () => {
     }
   }, [platform, genre, mood, searchQuery, minRating]);
 
+  // Keyword synonyms for broader, more forgiving search.
+  const keywordSynonyms: Record<string, string[]> = {
+    survival: ["survive", "post-apocalyptic", "apocalypse", "wilderness", "zombie", "outbreak"],
+    magic: ["magical", "wizard", "witch", "sorcery", "spell", "fantasy", "supernatural"],
+    crime: ["criminal", "detective", "police", "mafia", "heist", "investigation", "murder"],
+    future: ["futuristic", "sci-fi", "dystopian", "cyberpunk", "space", "robot", "ai"],
+    family: ["families", "parent", "kids", "children", "household", "siblings"],
+    mystery: ["mysterious", "puzzle", "secret", "investigation", "whodunit", "detective"],
+    school: ["high school", "college", "student", "teen", "academy", "university", "campus"],
+  };
+
+  const expandQuery = (q: string): string[] => {
+    const base = q.toLowerCase().trim();
+    if (!base) return [];
+    const tokens = base.split(/\s+/).filter(t => t.length >= 2);
+    const expanded = new Set<string>([base, ...tokens]);
+    for (const t of tokens) {
+      const syns = keywordSynonyms[t];
+      if (syns) syns.forEach(s => expanded.add(s));
+    }
+    return Array.from(expanded);
+  };
+
+  const matchesSearchStrict = (s: Series, q: string) => {
+    if (!q) return true;
+    const needle = q.toLowerCase().trim();
+    return s.title.toLowerCase().includes(needle) || s.description.toLowerCase().includes(needle);
+  };
+
+  const matchesSearchBroad = (s: Series, q: string) => {
+    if (!q) return true;
+    const terms = expandQuery(q);
+    const hay = `${s.title} ${s.description} ${s.genre} ${s.platform}`.toLowerCase();
+    return terms.some(t => hay.includes(t));
+  };
+
   const buildReason = (p: string, g: string, m: Mood | "") => {
     const parts: string[] = [];
     if (p) parts.push(p);
@@ -252,14 +288,25 @@ const Index = () => {
     return `Recommended because you selected ${parts.join(" and ")}.`;
   };
 
-  // Smart, tiered recommendation engine. Mood acts as a soft preference:
-  // we relax constraints progressively until we find matches, instead of
-  // returning an empty result set.
+  // Smart, tiered recommendation engine. Platform & genre are highest
+  // priority; mood, rating, and search are progressively relaxed until
+  // we find matches, instead of returning an empty result set.
+  type RelaxLevel =
+    | "none"
+    | "mood"
+    | "rating"
+    | "search-broad"
+    | "search-dropped"
+    | "genre"
+    | "platform"
+    | "all";
   const computeResults = (
     p: string,
     g: string,
-    m: Mood | ""
-  ): { list: Series[]; relaxed: "none" | "mood" | "genre" | "platform" | "all" } => {
+    m: Mood | "",
+    q: string,
+    minR: number
+  ): { list: Series[]; relaxed: RelaxLevel } => {
     const dedupeList = (list: Series[]) => {
       const seen = new Set<string>();
       return list.filter(s => (seen.has(s.title) ? false : (seen.add(s.title), true)));
@@ -269,6 +316,9 @@ const Index = () => {
       platform?: string;
       genre?: string;
       mood?: Mood | "";
+      search?: string;
+      searchMode?: "strict" | "broad";
+      minRating?: number;
     }) => {
       let list: Series[] = seriesData;
       if (filters.platform) list = list.filter(s => s.platform === filters.platform);
@@ -277,40 +327,66 @@ const Index = () => {
         const allowed = new Set(moodToGenres[filters.mood]);
         list = list.filter(s => allowed.has(s.genre));
       }
+      if (typeof filters.minRating === "number" && filters.minRating > 0) {
+        list = list.filter(s => s.rating >= filters.minRating!);
+      }
+      if (filters.search) {
+        list = list.filter(s =>
+          filters.searchMode === "broad"
+            ? matchesSearchBroad(s, filters.search!)
+            : matchesSearchStrict(s, filters.search!)
+        );
+      }
       return dedupeList(list);
     };
 
-    // Tier 1: strict — all selected filters honored
-    const strict = apply({ platform: p, genre: g, mood: m });
+    const query = q.trim();
+
+    // Tier 1: strict — all filters honored
+    const strict = apply({ platform: p, genre: g, mood: m, search: query, searchMode: "strict", minRating: minR });
     if (strict.length > 0) return { list: strict, relaxed: "none" };
 
-    // Tier 2: relax mood (mood is a soft preference)
+    // Tier 2: relax mood
     if (m) {
-      const noMood = apply({ platform: p, genre: g });
-      if (noMood.length > 0) {
-        // Re-rank: items matching the mood's genre family come first
+      const r = apply({ platform: p, genre: g, search: query, searchMode: "strict", minRating: minR });
+      if (r.length > 0) {
         const allowed = new Set(moodToGenres[m]);
-        const ranked = [
-          ...noMood.filter(s => allowed.has(s.genre)),
-          ...noMood.filter(s => !allowed.has(s.genre)),
-        ];
+        const ranked = [...r.filter(s => allowed.has(s.genre)), ...r.filter(s => !allowed.has(s.genre))];
         return { list: dedupeList(ranked), relaxed: "mood" };
       }
     }
 
-    // Tier 3: relax genre, keep platform + mood preference
+    // Tier 3: relax minimum rating
+    if (minR > 0) {
+      const r = apply({ platform: p, genre: g, search: query, searchMode: "strict" });
+      if (r.length > 0) return { list: r, relaxed: "rating" };
+    }
+
+    // Tier 4: broaden search (partial/keyword/synonyms)
+    if (query) {
+      const r = apply({ platform: p, genre: g, search: query, searchMode: "broad" });
+      if (r.length > 0) return { list: r, relaxed: "search-broad" };
+    }
+
+    // Tier 5: drop search entirely, keep platform+genre
+    if (query) {
+      const r = apply({ platform: p, genre: g });
+      if (r.length > 0) return { list: r, relaxed: "search-dropped" };
+    }
+
+    // Tier 6: relax genre
     if (g) {
-      const noGenre = apply({ platform: p, mood: m });
-      if (noGenre.length > 0) return { list: noGenre, relaxed: "genre" };
+      const r = apply({ platform: p });
+      if (r.length > 0) return { list: r, relaxed: "genre" };
     }
 
-    // Tier 4: relax platform, keep genre/mood preference
+    // Tier 7: relax platform
     if (p) {
-      const noPlatform = apply({ genre: g, mood: m });
-      if (noPlatform.length > 0) return { list: noPlatform, relaxed: "platform" };
+      const r = apply({ genre: g });
+      if (r.length > 0) return { list: r, relaxed: "platform" };
     }
 
-    // Tier 5: top-rated catalog as a final broad fallback
+    // Tier 8: top-rated catalog as a final broad fallback
     const broad = dedupeList([...seriesData].sort((a, b) => b.rating - a.rating)).slice(0, 8);
     return { list: broad, relaxed: "all" };
   };
@@ -320,19 +396,19 @@ const Index = () => {
       toast.error("Pick at least a platform, genre, mood, or search term");
       return;
     }
-    const { list, relaxed } = computeResults(platform, genre, mood);
+    const { list, relaxed } = computeResults(platform, genre, mood, searchQuery, minRating[0]);
     setResults(list);
     const base = buildReason(platform, genre, mood);
-    const helper =
-      relaxed === "mood"
-        ? "No exact mood match was found, so here are similar recommendations."
-        : relaxed === "genre"
-        ? "No exact genre match — showing related picks on your platform."
-        : relaxed === "platform"
-        ? "Nothing matched on that platform — showing similar picks elsewhere."
-        : relaxed === "all"
-        ? "No exact match — here are top-rated picks you might enjoy."
-        : "";
+    const helperMap: Record<string, string> = {
+      mood: "No exact mood match was found — showing similar recommendations instead.",
+      rating: "No exact matches at that rating — showing similar recommendations instead.",
+      "search-broad": "No exact matches found — showing similar recommendations instead.",
+      "search-dropped": "No matches for your search — showing similar picks for your platform and genre.",
+      genre: "No exact genre match — showing related picks on your platform.",
+      platform: "Nothing matched on that platform — showing similar picks elsewhere.",
+      all: "No exact match — here are top-rated picks you might enjoy.",
+    };
+    const helper = helperMap[relaxed] ?? "";
     setReasonText([base, helper].filter(Boolean).join(" "));
     setSurprise(null);
     setHasSearched(true);
@@ -341,14 +417,8 @@ const Index = () => {
   const handleSurprise = () => {
     // Surprise Me always returns something — fall back through the same
     // tiered logic, then to the full catalog if needed.
-    const { list } = computeResults(platform, genre, mood);
-    const filtered = filterResults(list);
-    const source =
-      filtered.length > 0
-        ? filtered
-        : list.length > 0
-        ? list
-        : seriesData;
+    const { list } = computeResults(platform, genre, mood, searchQuery, minRating[0]);
+    const source = list.length > 0 ? list : seriesData;
     const pick = source[Math.floor(Math.random() * source.length)];
     if (!pick) {
       toast.error("No matches available — try clearing some filters.");
@@ -360,14 +430,9 @@ const Index = () => {
     toast.success(`Surprise pick: ${pick.title}`);
   };
 
-  const filterResults = (list: Series[]) =>
-    list.filter(s => {
-      const matchesSearch = !searchQuery || s.title.toLowerCase().includes(searchQuery.toLowerCase()) || s.description.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesRating = s.rating >= minRating[0];
-      return matchesSearch && matchesRating;
-    });
-
-  const filteredResults = filterResults(results);
+  // Search & rating are already applied inside computeResults' tiered engine,
+  // so we render `results` directly to avoid double-filtering away fallbacks.
+  const filteredResults = results;
   const dedupe = (list: Series[]) => {
     const seen = new Set<string>();
     return list.filter(s => (seen.has(s.title) ? false : (seen.add(s.title), true)));
