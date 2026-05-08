@@ -4,10 +4,14 @@ export interface Series {
   platform: string;
   genre: string;
   rating: number;
+  /** Optional mood tags for richer matching beyond genre mapping. */
+  moods?: Mood[];
+  /** Optional Tailwind gradient class fragment, e.g. "from-rose-500 to-orange-500". */
+  posterColor?: string;
 }
 
 export const platforms = ["Netflix", "Prime Video", "Disney+", "Max", "Apple TV+"] as const;
-export const genres = ["Drama", "Comedy", "Action", "Sci-Fi", "Thriller"] as const;
+export const genres = ["Drama", "Comedy", "Action", "Sci-Fi", "Thriller", "Mystery", "Fantasy"] as const;
 export const moods = ["Funny", "Relaxing", "Exciting", "Suspenseful", "Mind-blowing"] as const;
 export type Mood = (typeof moods)[number];
 
@@ -17,14 +21,16 @@ export const genreToMood: Record<string, Mood> = {
   Action: "Exciting",
   Thriller: "Suspenseful",
   "Sci-Fi": "Mind-blowing",
+  Mystery: "Suspenseful",
+  Fantasy: "Mind-blowing",
 };
 
 export const moodToGenres: Record<Mood, string[]> = {
   Funny: ["Comedy"],
   Relaxing: ["Drama", "Comedy"],
-  Exciting: ["Action", "Thriller"],
-  Suspenseful: ["Thriller", "Drama"],
-  "Mind-blowing": ["Sci-Fi"],
+  Exciting: ["Action", "Thriller", "Fantasy"],
+  Suspenseful: ["Thriller", "Mystery", "Drama"],
+  "Mind-blowing": ["Sci-Fi", "Fantasy"],
 };
 
 export const platformStyles: Record<string, string> = {
